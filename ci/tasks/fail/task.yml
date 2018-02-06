@@ -6,7 +6,7 @@ image_resource:
   source: {repository: czero/rootfs}
 
 inputs:
-- name: fail
+- name: utils
 
 run:
   path: utils/ci/tasks/fail/task.sh

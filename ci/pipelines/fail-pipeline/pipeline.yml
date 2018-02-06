@@ -11,6 +11,6 @@ resources:
 jobs:
 - name: fail-job
   plan:
-  - get utils
-  - task:
+  - get: utils
+  - task: fail
     file: utils/ci/tasks/fail/task.yml
