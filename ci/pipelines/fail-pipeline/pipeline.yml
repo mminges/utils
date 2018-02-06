@@ -1,0 +1,16 @@
+---
+resources:
+- name: utils
+  type: git
+  source:
+    uri: ((github_repo))
+    branch: ((github_branch))
+    username: ((github_username))
+    password: ((github_token))
+
+jobs:
+- name: fail-job
+  plan:
+  - get utils
+  - task:
+    file: utils/ci/tasks/fail/task.yml
