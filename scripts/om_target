@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+
+function usage() {
+
+echo -en "\nUsage: "
+basename $0
+cat <<EOF
+
+          -a       Add OpsMan to config
+                   Will prompt for alias, domain, username and password
+
+          -c       Prints out OpsMan creds
+
+          -d       Deletes an OpsMan target from config
+
+EOF
+exit
+}
+
+function config() {
+
+  if [[ ! -s ${OM_CONFIG} ]]; then
+    echo -e "{\n  \"targets\" : []\n}" > ${OM_CONFIG}
+  fi
+}
+
+function add_target() {
+
+  config
+  tmp_om_config="$(mktemp)"
+
+  read -p 'OpsMan Alias: ' opsman_alias
+  read -p 'OpsMan Domain: ' opsman_domain
+  read -p 'OpsMan Username: ' opsman_username
+  read -s -p 'OpsMan Password: ' opsman_password
+
+  jq '.targets += [{"alias": '\"${opsman_alias}\"', "domain": '\"${opsman_domain}\"', "username": '\"${opsman_username}\"', "password": '\"${opsman_password}\"'}]' ${OM_CONFIG} > ${tmp_om_config}
+ 
+  mv ${tmp_om_config} ${OM_CONFIG}
+}
+
+function target() {
+
+  TARGETS=$(cat ${OM_CONFIG} | jq -r '.targets[].alias')
+  declare -a OM_TARGETS=(${TARGETS})
+
+  for index in ${!OM_TARGETS[@]}; do
+    printf "%4d: %s\n" $index ${OM_TARGETS[$index]}
+  done
+
+  read -p 'Choose a OpsMan target: ' target
+  echo "You chose: ${OM_TARGETS[$target]}"
+  TARGET=${OM_TARGETS[$target]}
+}
+
+function delete_target() {
+
+  target
+  OM_TARGET=$(cat ${OM_CONFIG} \
+    | jq -r '.targets[] | select(.alias == '\"${TARGET}\"')')
+  echo -e "\n$OM_TARGET\n"
+
+  tmp_om_config="$(mktemp)"
+
+  declare -a DECISIONS=(yes no)
+
+  for index in ${!DECISIONS[@]}; do
+    printf "%1d: %s\n" $index ${DECISIONS[$index]}
+  done
+
+  read -p 'Are you sure you want to delete this target: ' decision 
+  echo "You chose: ${DECISIONS[$decision]}"
+
+  (jq 'del(.targets[] | select(.alias == '\"${TARGET}\"'))') < ~/.om_config.json > $tmp_om_config
+
+  mv ${tmp_om_config} ${OM_CONFIG}  
+}
+  
+
+function set_target() {
+
+  target
+  OM_TARGET=$(cat ${OM_CONFIG} \
+    | jq -r '.targets[] | select(.alias == '\"${TARGET}\"') | "\(.domain) \(.username) \(.password)"')
+
+  export OPSMAN_DOMAIN_OR_IP_ADDRESS=$(echo "${OM_TARGET}" | cut -d ' ' -f1)
+  export OPS_MGR_USR=$(echo "${OM_TARGET}" | cut -d ' ' -f2)
+  export OPS_MGR_PWD=$(echo "${OM_TARGET}" | cut -d ' ' -f3)
+
+  export OM_CLI="om -t https://${OPSMAN_DOMAIN_OR_IP_ADDRESS} -u ${OPS_MGR_USR} -p ${OPS_MGR_PWD} -k"
+}
+
+function creds() {
+
+  target
+
+  OM_TARGET=$(cat ${OM_CONFIG} \
+    | jq -r '.targets[] | select(.alias == '\"${TARGET}\"') | "\(.username) \(.password)"')
+
+  echo "${OM_TARGET}" | column -t
+}
+
+OM_CONFIG=${HOME}/.om_config.json
+action=$1
+
+case "$action" in
+  -a)
+    add_target
+    ;;
+  -c)
+    creds
+    ;;
+  -d)
+    delete_target
+    ;;
+  -h)
+    usage
+    ;;
+  *)
+    set_target
+    ;;
+esac

@@ -1,0 +1,67 @@
+#!/bin/bash
+
+set -e
+
+function usage() {
+
+echo -en "\nUsage: "
+basename $0
+cat <<EOF
+
+          -c       Prints out CF Admin creds
+
+EOF
+exit
+}
+
+function source_opsman_config() {
+
+  CWD=${PWD}
+  source ${CWD}/om_target.sh
+}
+
+function get_login_metadata() {
+
+  source_opsman_config
+
+  CF_GUID=$(${OM_CLI} curl -s -p /api/v0/deployed/products \
+    | jq -r '.[] | select(.type == "cf") .guid')
+  
+  CF_LOGIN_CREDS=$(${OM_CLI} curl -s -p /api/v0/deployed/products/${CF_GUID}/credentials/.uaa.admin_credentials \
+    | jq -r '.credential.value | "\(.identity) \(.password)"')
+  CF_ADMIN_USR=$(echo ${CF_LOGIN_CREDS} | cut -d ' ' -f1)
+  CF_ADMIN_PWD=$(echo ${CF_LOGIN_CREDS} | cut -d ' ' -f2)
+
+  CF_SYS_DOMAIN=$(${OM_CLI} curl -s -p /api/v0/deployed/products/${CF_GUID}/manifest \
+    | jq -r '.instance_groups[] | select(.name == "cloud_controller") .jobs[] | select(.name == "cloud_controller_ng") .properties.domain')
+}
+
+function cf_login() {
+
+  get_login_metadata
+
+  cf api https://api.${CF_SYS_DOMAIN}
+  cf auth ${CF_ADMIN_USR} ${CF_ADMIN_PWD}
+  cf t -o system -s system
+}
+
+function cf_creds() {
+
+  get_login_metadata
+
+  echo "${CF_ADMIN_USR} ${CF_ADMIN_PWD}"
+}
+
+action=$1
+
+case "$action" in
+  -c)
+    cf_creds
+    ;;
+  -h)
+    usage
+    ;;
+  *)
+    cf_login
+    ;;
+esac
