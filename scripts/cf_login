@@ -11,36 +11,45 @@ cat <<EOF
           -c       Prints out CF Admin creds
 
 EOF
-exit
 }
 
 function source_opsman_config() {
 
-  CWD=${PWD}
-  source ${CWD}/om_target.sh
+  CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  source ${CWD}/om_target
 }
 
 function get_login_metadata() {
 
   source_opsman_config
 
-  CF_GUID=$(${OM_CLI} curl -s -p /api/v0/deployed/products \
+  echo -en "\nGetting CF Admin Login Credentials: "
+
+  CF_GUID=$(om curl -s -p /api/v0/deployed/products \
     | jq -r '.[] | select(.type == "cf") .guid')
   
-  CF_LOGIN_CREDS=$(${OM_CLI} curl -s -p /api/v0/deployed/products/${CF_GUID}/credentials/.uaa.admin_credentials \
+  CF_LOGIN_CREDS=$(om curl -s -p /api/v0/deployed/products/${CF_GUID}/credentials/.uaa.admin_credentials \
     | jq -r '.credential.value | "\(.identity) \(.password)"')
   CF_ADMIN_USR=$(echo ${CF_LOGIN_CREDS} | cut -d ' ' -f1)
   CF_ADMIN_PWD=$(echo ${CF_LOGIN_CREDS} | cut -d ' ' -f2)
 
-  CF_SYS_DOMAIN=$(${OM_CLI} curl -s -p /api/v0/deployed/products/${CF_GUID}/manifest \
-    | jq -r '.instance_groups[] | select(.name == "cloud_controller") .jobs[] | select(.name == "cloud_controller_ng") .properties.domain')
+  # Get system domain from staged product instead of deployed product endpoint
+  # PAS and Small Footprint have different property endpoints
+  CF_SYS_DOMAIN=$(om curl -s -p /api/v0/staged/products/${CF_GUID}/properties \
+    | jq -r '.properties.".cloud_controller.system_domain".value')
+
+  if [ $? != 0 ]; then
+    echo -e "Failed\n"
+  else
+    echo -e "Ok\n"
+  fi
 }
 
 function cf_login() {
 
   get_login_metadata
-
-  cf api https://api.${CF_SYS_DOMAIN}
+ 
+  cf api https://api.${CF_SYS_DOMAIN} --skip-ssl-validation
   cf auth ${CF_ADMIN_USR} ${CF_ADMIN_PWD}
   cf t -o system -s system
 }

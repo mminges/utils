@@ -1,0 +1,118 @@
+#!/bin/bash
+
+set -e
+
+function usage() {
+
+echo -en "\nUsage: "
+basename $0
+cat <<EOF
+
+          -c       Prints out CF UAA Admin creds
+
+EOF
+}
+
+function source_opsman_config() {
+
+  CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  source ${CWD}/om_target
+}
+
+function uaa_login() {
+
+  source_opsman_config
+
+  declare -a UAA_TARGETS=(opsman director pas)
+
+  for index in ${!UAA_TARGETS[@]}
+  do
+    printf "%4d: %s\n" $index ${UAA_TARGETS[$index]}
+  done
+
+  read -p 'Which UAA: ' uaa_target
+  echo "You chose: ${UAA_TARGETS[$uaa_target]}"
+  UAA_TARGET=${UAA_TARGETS[$uaa_target]}
+
+  if [[ "${UAA_TARGET}" == "opsman" ]]; then
+    get_opsman_uaa_login_metadata
+  elif [[ "${UAA_TARGET}" == "director" ]]; then
+    get_director_uaa_login_metadata
+  elif [[ "${UAA_TARGET}" == "pas" ]]; then
+    get_pas_uaa_login_metadata
+
+    uaac target https://uaa.${CF_SYS_DOMAIN} --skip-ssl-validation
+    uaac token client get ${CF_UAA_ADMIN_CLIENT} -s "${CF_UAA_ADMIN_CLIENT_SECRET}"
+  fi
+
+}
+
+function get_opsman_uaa_login_metadata() {
+
+  uaac target https://${OPSMAN_DOMAIN_OR_IP_ADDRESS}/uaa --skip-ssl-validation
+  uaac token owner get opsman "${OPS_MGR_USR}" -s "" -p "${OPS_MGR_PWD}"
+}
+
+function get_director_uaa_login_metadata() {
+
+  DIRECTOR_ADDRESS="$(${OM_CLI} curl -s -p /api/v0/deployed/director/manifest | \
+    jq -r '.instance_groups[] | select(.name == "bosh") .properties.director.address')"
+
+  UAA_LOGIN_CLIENT_CREDS=$(${OM_CLI} curl -s -p /api/v0/deployed/director/credentials/uaa_login_client_credentials \
+    | jq -r '.credential.value | "\(.identity) \(.password)"')
+  UAA_LOGIN_CLIENT=$(echo ${UAA_LOGIN_CLIENT_CREDS} | cut -d ' ' -f1)
+  UAA_LOGIN_CLIENT_PASSWORD=$(echo ${UAA_LOGIN_CLIENT_CREDS} | cut -d ' ' -f2)
+
+  UAA_ADMIN_CLIENT_CREDS=$(${OM_CLI} curl -s -p /api/v0/deployed/director/credentials/uaa_admin_user_credentials \
+    | jq -r '.credential.value | "\(.identity) \(.password)"')
+  UAA_ADMIN_CLIENT=$(echo ${UAA_ADMIN_CLIENT_CREDS} | cut -d ' ' -f1)
+  UAA_ADMIN_CLIENT_PASSWORD=$(echo ${UAA_ADMIN_CLIENT_CREDS} | cut -d ' ' -f2)
+
+  uaac target https://${DIRECTOR_ADDRESS}:8443 --skip-ssl-validation
+  uaac token owner get ${UAA_LOGIN_CLIENT} ${UAA_ADMIN_CLIENT} -s ${UAA_LOGIN_CLIENT_PASSWORD} -p ${UAA_ADMIN_CLIENT_PASSWORD}
+}
+
+function get_pas_uaa_login_metadata() {
+
+  echo -en "\nGetting CF UAA Admin Client Credentials: "
+
+  CF_GUID=$(${OM_CLI} curl -s -p /api/v0/deployed/products \
+    | jq -r '.[] | select(.type == "cf") .guid')
+  
+  CF_UAA_LOGIN_CREDS=$(${OM_CLI} curl -s -p /api/v0/deployed/products/${CF_GUID}/credentials/.uaa.admin_client_credentials \
+    | jq -r '.credential.value | "\(.identity) \(.password)"')
+  CF_UAA_ADMIN_CLIENT=$(echo ${CF_UAA_LOGIN_CREDS} | cut -d ' ' -f1)
+  CF_UAA_ADMIN_CLIENT_SECRET=$(echo ${CF_UAA_LOGIN_CREDS} | cut -d ' ' -f2)
+
+  # Get system domain from staged product instead of deployed product endpoint
+  # PAS and Small Footprint have different property endpoints
+  CF_SYS_DOMAIN=$(${OM_CLI} curl -s -p /api/v0/staged/products/${CF_GUID}/properties \
+    | jq -r '.properties.".cloud_controller.system_domain".value')
+  
+  if [ $? != 0 ]; then
+    echo -e "Failed\n"
+  else
+    echo -e "Ok\n"
+  fi
+}
+
+function cf_uaa_creds() {
+
+  get_login_metadata
+
+  echo "${CF_UAA_ADMIN_CLIENT} ${CF_UAA_ADMIN_CLIENT_SECRET}"
+}
+
+action=$1
+
+case "$action" in
+  -c)
+    cf_uaa_creds
+    ;;
+  -h)
+    usage
+    ;;
+  *)
+    uaa_login
+    ;;
+esac
