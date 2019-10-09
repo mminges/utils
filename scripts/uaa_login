@@ -55,15 +55,15 @@ function get_opsman_uaa_login_metadata() {
 
 function get_director_uaa_login_metadata() {
 
-  DIRECTOR_ADDRESS="$(${OM_CLI} curl -s -p /api/v0/deployed/director/manifest | \
+  DIRECTOR_ADDRESS="$(om curl -s -p /api/v0/deployed/director/manifest | \
     jq -r '.instance_groups[] | select(.name == "bosh") .properties.director.address')"
 
-  UAA_LOGIN_CLIENT_CREDS=$(${OM_CLI} curl -s -p /api/v0/deployed/director/credentials/uaa_login_client_credentials \
+  UAA_LOGIN_CLIENT_CREDS=$(om curl -s -p /api/v0/deployed/director/credentials/uaa_login_client_credentials \
     | jq -r '.credential.value | "\(.identity) \(.password)"')
   UAA_LOGIN_CLIENT=$(echo ${UAA_LOGIN_CLIENT_CREDS} | cut -d ' ' -f1)
   UAA_LOGIN_CLIENT_PASSWORD=$(echo ${UAA_LOGIN_CLIENT_CREDS} | cut -d ' ' -f2)
 
-  UAA_ADMIN_CLIENT_CREDS=$(${OM_CLI} curl -s -p /api/v0/deployed/director/credentials/uaa_admin_user_credentials \
+  UAA_ADMIN_CLIENT_CREDS=$(om curl -s -p /api/v0/deployed/director/credentials/uaa_admin_user_credentials \
     | jq -r '.credential.value | "\(.identity) \(.password)"')
   UAA_ADMIN_CLIENT=$(echo ${UAA_ADMIN_CLIENT_CREDS} | cut -d ' ' -f1)
   UAA_ADMIN_CLIENT_PASSWORD=$(echo ${UAA_ADMIN_CLIENT_CREDS} | cut -d ' ' -f2)
@@ -76,17 +76,17 @@ function get_pas_uaa_login_metadata() {
 
   echo -en "\nGetting CF UAA Admin Client Credentials: "
 
-  CF_GUID=$(${OM_CLI} curl -s -p /api/v0/deployed/products \
+  CF_GUID=$(om curl -s -p /api/v0/deployed/products \
     | jq -r '.[] | select(.type == "cf") .guid')
   
-  CF_UAA_LOGIN_CREDS=$(${OM_CLI} curl -s -p /api/v0/deployed/products/${CF_GUID}/credentials/.uaa.admin_client_credentials \
+  CF_UAA_LOGIN_CREDS=$(om curl -s -p /api/v0/deployed/products/${CF_GUID}/credentials/.uaa.admin_client_credentials \
     | jq -r '.credential.value | "\(.identity) \(.password)"')
   CF_UAA_ADMIN_CLIENT=$(echo ${CF_UAA_LOGIN_CREDS} | cut -d ' ' -f1)
   CF_UAA_ADMIN_CLIENT_SECRET=$(echo ${CF_UAA_LOGIN_CREDS} | cut -d ' ' -f2)
 
   # Get system domain from staged product instead of deployed product endpoint
   # PAS and Small Footprint have different property endpoints
-  CF_SYS_DOMAIN=$(${OM_CLI} curl -s -p /api/v0/staged/products/${CF_GUID}/properties \
+  CF_SYS_DOMAIN=$(om curl -s -p /api/v0/staged/products/${CF_GUID}/properties \
     | jq -r '.properties.".cloud_controller.system_domain".value')
   
   if [ $? != 0 ]; then
@@ -98,7 +98,8 @@ function get_pas_uaa_login_metadata() {
 
 function cf_uaa_creds() {
 
-  get_login_metadata
+  source_opsman_config
+  get_pas_uaa_login_metadata
 
   echo "${CF_UAA_ADMIN_CLIENT} ${CF_UAA_ADMIN_CLIENT_SECRET}"
 }
