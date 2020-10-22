@@ -25,7 +25,8 @@ function get_login_metadata() {
 
   echo -en "\nGetting TKGi Admin Login Credentials: "
 
-  export TKGI_ADMIN_PWD=$(om credentials \
+  # Exporting PKS_USER_PASSWORD allows a non-interactive login for  pks get-credentials
+  export PKS_USER_PASSWORD=$(om credentials \
     -p pivotal-container-service \
     -c .properties.uaa_admin_password \
     -f secret)
@@ -47,14 +48,28 @@ function tkgi_login() {
 
   pks login -a https://${TKGI_API} -k \
     -u admin \
-    -p ${TKGI_ADMIN_PWD}
+    -p ${PKS_USER_PASSWORD}
+
+  CLUSTERS=$(pks clusters --json | jq -r '.[].name' | sort)
+  declare -a TKGI_CLUSTERS=(${CLUSTERS})
+
+  for index in ${!TKGI_CLUSTERS[@]}; do
+    printf "%4d: %s\n" $index ${TKGI_CLUSTERS[$index]}
+  done
+
+  read -p 'Choose a TKGi cluster: ' cluster
+  echo "You chose: ${TKGI_CLUSTERS[$cluster]}"
+  CLUSTER=${TKGI_CLUSTERS[$cluster]}
+
+  pks get-credentials $CLUSTER
+  kubectl config use-context $CLUSTER
 }
 
 function tkgi_creds() {
 
   get_login_metadata
 
-  echo "admin ${TKGI_ADMIN_PWD}"
+  echo "admin ${PKS_USER_PASSWORD}"
 }
 
 action=$1
