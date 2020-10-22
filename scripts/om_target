@@ -94,6 +94,8 @@ function set_target() {
   export OM_USERNAME=$(echo "${OM_METADATA}" | cut -d ' ' -f2)
   export OM_PASSWORD=$(echo "${OM_METADATA}" | cut -d ' ' -f3)
   export OM_SKIP_SSL_VALIDATION=true
+
+  eval "$(om bosh-env)"
 }
 
 function opsman_creds() {

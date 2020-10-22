@@ -1,0 +1,72 @@
+#!/bin/env bash
+
+set -e
+
+function usage() {
+
+echo -en "\nUsage: "
+basename $0
+cat <<EOF
+
+          -c       Prints out TKGi Admin creds
+
+EOF
+}
+
+function source_opsman_config() {
+
+  CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  source ${CWD}/om_target
+}
+
+function get_login_metadata() {
+
+  source_opsman_config
+
+  echo -en "\nGetting TKGi Admin Login Credentials: "
+
+  export TKGI_ADMIN_PWD=$(om credentials \
+    -p pivotal-container-service \
+    -c .properties.uaa_admin_password \
+    -f secret)
+  TKGI_GUID=$(om curl -s -p /api/v0/deployed/products \
+    | jq -r '.[] | select(.type == "pivotal-container-service") .guid')
+  TKGI_API=$(om curl -s -p /api/v0/staged/products/${TKGI_GUID}/properties \
+    | jq -r '.properties.".properties.pks_api_hostname".value')
+
+  if [ $? != 0 ]; then
+    echo -e "Failed\n"
+  else
+    echo -e "Ok\n"
+  fi
+}
+
+function tkgi_login() {
+
+  get_login_metadata
+
+  pks login -a https://${TKGI_API} -k \
+    -u admin \
+    -p ${TKGI_ADMIN_PWD}
+}
+
+function tkgi_creds() {
+
+  get_login_metadata
+
+  echo "admin ${TKGI_ADMIN_PWD}"
+}
+
+action=$1
+
+case "$action" in
+  -c)
+    tkgi_creds
+    ;;
+  -h)
+    usage
+    ;;
+  *)
+    tkgi_login
+    ;;
+esac
