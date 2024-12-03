@@ -36,6 +36,7 @@ function select_product () {
     stemcells-ubuntu-xenial \
     stemcells-ubuntu-jammy \
     stemcells-ubuntu-jammy-fips \
+    platform-automation \
     p-concourse \
     elastic-runtime \
     p-isolation-segment \
@@ -93,6 +94,8 @@ function select_product_file () {
   PRODUCT_RELEASE_NOTES=$(echo $PRODUCT_METADATA | cut -d '|' -f5)
   PRODUCT_ID=$(echo $PRODUCT_METADATA | cut -d '|' -f6)
   FILES=$(curlit api/v2/products/$PRODUCT/releases/$PRODUCT_ID/product_files | jq -r '.product_files[].aws_object_key' | cut -d '/' -f2)
+  DEPENDENCY_SPECIFIERS=$(curlit api/v2/products/$PRODUCT/releases/$PRODUCT_ID/dependency_specifiers \
+    | jq -r '.dependency_specifiers[] | "\(.product.name): \(.specifier)")
 
   declare -a PRODUCT_FILES=(${FILES})
 
@@ -110,6 +113,7 @@ function select_product_file () {
 select_product_file
 
 ADDITIONAL_FILES=$(echo -e "\n$FILES")
+DEPENDENCIES=$(echo -e "\n$DEPENDENCY_SPECIFIERS")
 
 printf '\n%.0s' {1,2}
 printf "${Yellow}---------------${Color_Off}\n"
@@ -124,4 +128,6 @@ printf "${formattedOutput}" "PRODUCT_RELEASE_NOTES:" "$PRODUCT_RELEASE_NOTES"
 printf "${formattedOutput}" "PRODUCT_DOWNLOAD:" "$PRODUCT_DOWNLOAD"
 printf '\n%.0s' {1}
 printf "${formattedOutput}" "ADDITIONAL_PRODUCT_FILES:" "$ADDITIONAL_FILES"
+printf '\n%.0s' {1}
+printf "${formattedOutput}" "DEPENDENCIES:" "$DEPENDENCIES"
 printf '\n%.0s' {1,2}
