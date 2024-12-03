@@ -95,7 +95,7 @@ function select_product_file () {
   PRODUCT_ID=$(echo $PRODUCT_METADATA | cut -d '|' -f6)
   FILES=$(curlit api/v2/products/$PRODUCT/releases/$PRODUCT_ID/product_files | jq -r '.product_files[].aws_object_key' | cut -d '/' -f2)
   DEPENDENCY_SPECIFIERS=$(curlit api/v2/products/$PRODUCT/releases/$PRODUCT_ID/dependency_specifiers \
-    | jq -r '.dependency_specifiers[] | "\(.product.name): \(.specifier)")
+    | jq -r '.dependency_specifiers[] | "\(.product.name): \(.specifier)"')
 
   declare -a PRODUCT_FILES=(${FILES})
 
