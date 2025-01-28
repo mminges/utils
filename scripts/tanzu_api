@@ -52,6 +52,7 @@ function select_product () {
     p-metric-store \
     apm \
     pivotal_single_sign-on_service \
+    splunk-nozzle \
     p-clamav-addon)
 
   for index in ${!PIVNET_PRODUCTS[@]}; do
